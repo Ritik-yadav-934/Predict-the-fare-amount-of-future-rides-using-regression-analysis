@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import joblib
 import os
+import subprocess
 from datetime import datetime
 
 # Set page configuration
@@ -47,23 +48,52 @@ st.sidebar.info("""
 # Load model and scaler
 @st.cache_resource
 def load_model():
-    try:
-        model = joblib.load('models/uber_fare_model.pkl')
-        scaler = joblib.load('models/scaler.pkl')
-        return model, scaler
-    except FileNotFoundError:
-        st.info("🔄 Training model for the first time... Please wait!")
-        # Train the model
+    """Load model and scaler. If not present, try to train by running train_model.py.
+
+    Returns:
+        tuple: (model, scaler) or (None, None) on failure
+    """
+    model_path = 'models/uber_fare_model.pkl'
+    scaler_path = 'models/scaler.pkl'
+
+    # If both files exist, load and return
+    if os.path.exists(model_path) and os.path.exists(scaler_path):
         try:
-            import subprocess
-            subprocess.run(['python', 'train_model.py'], check=True)
-            model = joblib.load('models/uber_fare_model.pkl')
-            scaler = joblib.load('models/scaler.pkl')
-            st.success("✅ Model trained successfully!")
+            model = joblib.load(model_path)
+            scaler = joblib.load(scaler_path)
             return model, scaler
         except Exception as e:
-            st.error(f"❌ Error training model: {str(e)}")
+            st.error(f"❌ Failed to load model files: {e}")
             return None, None
+
+    # If missing, attempt to run training script (only if available)
+    if os.path.exists('train_model.py'):
+        st.info("Model files not found. Training model now (this may take a minute)...")
+        with st.spinner("Training model: running train_model.py..."):
+            try:
+                # Run the training script
+                subprocess.run(["python", "train_model.py"], check=True)
+            except subprocess.CalledProcessError as e:
+                st.error(f"❌ Training script failed: {e}")
+                return None, None
+
+        # After training, try loading again
+        if os.path.exists(model_path) and os.path.exists(scaler_path):
+            try:
+                model = joblib.load(model_path)
+                scaler = joblib.load(scaler_path)
+                st.success("✅ Model trained and loaded successfully!")
+                return model, scaler
+            except Exception as e:
+                st.error(f"❌ Failed to load model after training: {e}")
+                return None, None
+        else:
+            st.error("❌ Training completed but model files were not created.")
+            return None, None
+
+    # train_model.py not available
+    st.error("❌ Model files not found and training script is missing. Please run train_model.py locally.")
+    return None, None
 
 model, scaler = load_model()
 
