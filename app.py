@@ -52,8 +52,18 @@ def load_model():
         scaler = joblib.load('models/scaler.pkl')
         return model, scaler
     except FileNotFoundError:
-        st.error("❌ Model files not found. Please run train_model.py first!")
-        return None, None
+        st.info("🔄 Training model for the first time... Please wait!")
+        # Train the model
+        try:
+            import subprocess
+            subprocess.run(['python', 'train_model.py'], check=True)
+            model = joblib.load('models/uber_fare_model.pkl')
+            scaler = joblib.load('models/scaler.pkl')
+            st.success("✅ Model trained successfully!")
+            return model, scaler
+        except Exception as e:
+            st.error(f"❌ Error training model: {str(e)}")
+            return None, None
 
 model, scaler = load_model()
 
